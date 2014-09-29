@@ -52,11 +52,34 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
+type Style string
+
+const (
+	StyleUnderscores Style = "underscores"
+	StyleCamelCase   Style = "camelcase"
+	StyleNone        Style = "none"
+)
+
+func IsValidStyle(style Style) bool {
+	return style == StyleUnderscores ||
+		style == StyleCamelCase ||
+		style == StyleNone
+}
+
 var (
-	name = flag.String("name", "Foo", "the name of the struct")
-	pkg  = flag.String("pkg", "main", "the name of the package for the generated code")
+	name            = flag.String("name", "Foo", "the name of the struct")
+	pkg             = flag.String("pkg", "main", "the name of the package for the generated code")
+	jsonStyleString = flag.String("json-style", string(StyleUnderscores),
+		fmt.Sprintf(`the style of json struct tags: "%s", "%s", or "%s"`,
+			StyleUnderscores, StyleCamelCase, StyleNone))
+	jsonStyle       = StyleUnderscores
+	bsonStyleString = flag.String("bson-style", string(StyleNone),
+		fmt.Sprintf(`the style of bson struct tags: "%s", "%s", or "%s"`,
+			StyleUnderscores, StyleCamelCase, StyleNone))
+	bsonStyle = StyleNone
 )
 
 // Given a JSON string representation of an object and a name structName,
@@ -92,6 +115,14 @@ func generate(input io.Reader, structName, pkgName string) ([]byte, error) {
 	return formatted, err
 }
 
+func lowerFirst(s string) string {
+	if s == "" {
+		return ""
+	}
+	r, n := utf8.DecodeRuneInString(s)
+	return string(unicode.ToLower(r)) + s[n:]
+}
+
 // Generate go struct entries for a map[string]interface{} structure
 func generateTypes(obj map[string]interface{}, depth int) string {
 	structure := "struct {"
@@ -114,30 +145,51 @@ func generateTypes(obj map[string]interface{}, depth int) string {
 			valueType = generateTypes(value, depth+1) + "}"
 		}
 
-		fieldName := fmtFieldName(key)
-		structure += fmt.Sprintf("\n%s %s `json:\"%s\"`",
-			fieldName,
-			valueType,
-			key)
+		fieldName := fmtFieldName(key, true)
+
+		structure += fmt.Sprintf("\n%s %s", fieldName, valueType)
+
+		if jsonStyle != StyleNone || bsonStyle != StyleNone {
+			structure += "`"
+			if bsonStyle != StyleNone {
+				if bsonStyle == StyleUnderscores {
+					structure += fmt.Sprintf(`bson:"%s"`, key)
+				} else if bsonStyle == StyleCamelCase {
+					structure += fmt.Sprintf(`bson:"%s"`, lowerFirst(fmtFieldName(key, false)))
+				}
+
+				if jsonStyle != StyleNone {
+					structure += " "
+				}
+			}
+			if jsonStyle != StyleNone {
+				if jsonStyle == StyleUnderscores {
+					structure += fmt.Sprintf(`json:"%s"`, key)
+				} else if jsonStyle == StyleCamelCase {
+					structure += fmt.Sprintf(`json:"%s"`, lowerFirst(fmtFieldName(key, false)))
+				}
+			}
+			structure += "`"
+		}
 	}
 	return structure
 }
 
-var uppercaseFixups = map[string]bool{"id": true, "url": true}
+var uppercaseFixups = map[string]bool{"id": true, "url": true, "dob": true}
 
 // fmtFieldName formats a string as a struct key
 //
 // Example:
-// 	fmtFieldName("foo_id")
+// 	fmtFieldName("foo_id", true)
 // Output: FooID
-func fmtFieldName(s string) string {
+func fmtFieldName(s string, fixUpper bool) string {
 	parts := strings.Split(s, "_")
 	for i := range parts {
 		parts[i] = strings.Title(parts[i])
 	}
 	if len(parts) > 0 {
 		last := parts[len(parts)-1]
-		if uppercaseFixups[strings.ToLower(last)] {
+		if fixUpper && uppercaseFixups[strings.ToLower(last)] {
 			parts[len(parts)-1] = strings.ToUpper(last)
 		}
 	}
@@ -191,6 +243,17 @@ func main() {
 		flag.Usage()
 		fmt.Fprintln(os.Stderr, "Expects input on stdin")
 		os.Exit(1)
+	}
+
+	jsonStyle = Style(*jsonStyleString)
+	bsonStyle = Style(*bsonStyleString)
+
+	if !IsValidStyle(jsonStyle) {
+		fmt.Fprintln(os.Stderr, `Invalid json style: "%s"`, jsonStyle)
+	}
+
+	if !IsValidStyle(bsonStyle) {
+		fmt.Fprintln(os.Stderr, `Invalid bson style: "%s"`, bsonStyle)
 	}
 
 	if output, err := generate(os.Stdin, *name, *pkg); err != nil {

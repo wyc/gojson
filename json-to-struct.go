@@ -76,10 +76,12 @@ var (
 		fmt.Sprintf(`the style of json struct tags: "%s", "%s", or "%s"`,
 			StyleUnderscores, StyleCamelCase, StyleNone))
 	jsonStyle       = StyleUnderscores
+	jsonExtra       = flag.String("bson-extra", "", "any extras to add to the tag")
 	bsonStyleString = flag.String("bson-style", string(StyleNone),
 		fmt.Sprintf(`the style of bson struct tags: "%s", "%s", or "%s"`,
 			StyleUnderscores, StyleCamelCase, StyleNone))
 	bsonStyle = StyleNone
+	bsonExtra = flag.String("bson-extra", "", "any extras to add to the tag")
 )
 
 // Given a JSON string representation of an object and a name structName,
@@ -152,22 +154,32 @@ func generateTypes(obj map[string]interface{}, depth int) string {
 		if jsonStyle != StyleNone || bsonStyle != StyleNone {
 			structure += "`"
 			if bsonStyle != StyleNone {
+				fieldName := ""
 				if bsonStyle == StyleUnderscores {
-					structure += fmt.Sprintf(`bson:"%s"`, key)
+					fieldName = key
 				} else if bsonStyle == StyleCamelCase {
-					structure += fmt.Sprintf(`bson:"%s"`, lowerFirst(fmtFieldName(key, false)))
+					fieldName = lowerFirst(fmtFieldName(key, false))
 				}
+				if *bsonExtra != "" {
+					fieldName += "," + *bsonExtra
+				}
+				structure += fmt.Sprintf(`bson:"%s"`, fieldName)
 
 				if jsonStyle != StyleNone {
 					structure += " "
 				}
 			}
 			if jsonStyle != StyleNone {
+				fieldName := ""
 				if jsonStyle == StyleUnderscores {
-					structure += fmt.Sprintf(`json:"%s"`, key)
+					fieldName = key
 				} else if jsonStyle == StyleCamelCase {
-					structure += fmt.Sprintf(`json:"%s"`, lowerFirst(fmtFieldName(key, false)))
+					fieldName = lowerFirst(fmtFieldName(key, false))
 				}
+				if *jsonExtra != "" {
+					fieldName += "," + *jsonExtra
+				}
+				structure += fmt.Sprintf(`json:"%s"`, fieldName)
 			}
 			structure += "`"
 		}

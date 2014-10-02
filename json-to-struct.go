@@ -76,7 +76,7 @@ var (
 		fmt.Sprintf(`the style of json struct tags: "%s", "%s", or "%s"`,
 			StyleUnderscores, StyleCamelCase, StyleNone))
 	jsonStyle       = StyleUnderscores
-	jsonExtra       = flag.String("bson-extra", "", "any extras to add to the tag")
+	jsonExtra       = flag.String("json-extra", "", "any extras to add to the tag")
 	bsonStyleString = flag.String("bson-style", string(StyleNone),
 		fmt.Sprintf(`the style of bson struct tags: "%s", "%s", or "%s"`,
 			StyleUnderscores, StyleCamelCase, StyleNone))
